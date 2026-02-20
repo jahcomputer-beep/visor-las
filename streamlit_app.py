@@ -8,8 +8,8 @@ from fpdf import FPDF
 import tempfile
 import os
 
-# Configuración de página
-st.set_page_config(page_title="PetroPhysics Pro", layout="wide")
+# Configuración de página para Streamlit Cloud
+st.set_page_config(page_title="PetroPhysics Pro Viewer", layout="wide")
 
 def crear_pdf(las, fig, ntg, vcl_avg, phie_avg):
     pdf = FPDF()
@@ -31,14 +31,20 @@ def crear_pdf(las, fig, ntg, vcl_avg, phie_avg):
         pdf.image(tmpfile.name, x=10, y=None, w=180)
     return pdf.output()
 
-st.title("📂 Visor Petrofísico Avanzado")
+st.title("📊 Visor Petrofísico Profesional")
 st.markdown("Análisis interactivo de archivos .las con cálculos de $V_{cl}$, $PHIE$ y $NTG$")
 
 archivo = st.file_uploader("Cargar archivo .las", type=["las"])
 
 if archivo:
-    # Leer LAS
-    string_data = archivo.read().decode("utf-8")
+    # --- ARREGLO DE CODIFICACIÓN (UTF-8 / LATIN-1) ---
+    raw_data = archivo.read()
+    try:
+        string_data = raw_data.decode("utf-8")
+    except UnicodeDecodeError:
+        string_data = raw_data.decode("latin-1")
+    
+    # Lectura del archivo LAS
     las = lasio.read(string_data)
     df = las.df()
     df.index.name = 'DEPTH'
@@ -124,24 +130,22 @@ if archivo:
 
     # --- MÉTRICAS Y DESCARGAS ---
     st.sidebar.markdown("---")
-    st.sidebar.subheader("Métricas Calculadas")
+    st.sidebar.subheader("Resultados")
     st.sidebar.metric("Net-to-Gross", f"{ntg_val:.2%}")
     st.sidebar.metric("PHIE Promedio", f"{df['PHIE'].mean():.2%}")
 
     c1, c2 = st.columns(2)
     with c1:
-        # Excel con todas las columnas calculadas
         buf_xl = BytesIO()
         with pd.ExcelWriter(buf_xl, engine='openpyxl') as wr:
             df.to_excel(wr, sheet_name='Resultados_Petrofisicos')
-            # Agregar metadatos en otra hoja
             meta = [{"Mnemo": i.mnemonic, "Valor": i.value, "Unidad": i.unit} for i in las.well]
             pd.DataFrame(meta).to_excel(wr, sheet_name='Encabezado', index=False)
-        st.download_button("📂 Descargar Excel Full", buf_xl.getvalue(), f"{las.well.WELL.value}_Data.xlsx")
+        st.download_button("📥 Descargar Excel", buf_xl.getvalue(), f"{las.well.WELL.value}_Data.xlsx")
     
     with c2:
         pdf_rep = crear_pdf(las, fig, ntg_val, df['VCL'].mean(), df['PHIE'].mean())
         st.download_button("📄 Descargar Reporte PDF", pdf_rep, f"Reporte_{las.well.WELL.value}.pdf")
 
 else:
-    st.info("👋 Bienvenido. Por favor carga un archivo .las para comenzar el análisis.")
+    st.info("👋 Sube un archivo .las para iniciar el análisis interactivo.")
